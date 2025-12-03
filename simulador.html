@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simulador DSC Profesional - Modo Capacitación</title>
+<style>
+:root{
+  --bg:#07121a; --panel:#e6eef6; --dark:#0b1b25; --green:#00c853; --blue:#00a6d6; --amber:#ffd54f; --red:#ff5252;
+  --text-dark:#071428;
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#041018,#071526);font-family:Inter,Arial,Helvetica,sans-serif;color:white;display:flex;justify-content:center;padding:18px}
+.container{width:1100px;display:flex;gap:18px;align-items:flex-start}
+.left{width:680px}
+.center{width:320px}
+.right{width:240px}
+.panel{background:var(--panel);border-radius:12px;padding:14px;color:var(--text-dark);box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.title{font-weight:800;margin-bottom:8px}
+.topbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.btn{background:#163040;color:#e6eef6;padding:8px 10px;border-radius:8px;border:none;cursor:pointer;font-weight:700}
+.btn.warn{background:#ffb95c;color:#111}
+.btn.red{background:#ff6b6b;color:#111}
+.display{background:#001a00;color:#9bff9b;font-family:monospace;padding:12px;border-radius:6px;text-align:center;font-weight:700}
+.subdisplay{background:linear-gradient(90deg,#071827,#0b2430);padding:8px;border-radius:6px;margin-top:8px;font-size:13px;color:#cfefff;min-height:34px}
+.leds{display:flex;gap:12px;margin-top:10px;align-items:center;justify-content:center}
+.ledWrap{display:flex;flex-direction:column;align-items:center;font-size:12px}
+.dot{width:16px;height:16px;border-radius:50%;background:#444;box-shadow:inset 0 -2px 3px rgba(0,0,0,.4);margin-bottom:6px}
+.dot.on.power{background:var(--green);box-shadow:0 0 8px rgba(0,200,83,.2)}
+.dot.on.ready{background:var(--blue);box-shadow:0 0 8px rgba(0,166,214,.2)}
+.dot.on.armed{background:var(--amber);box-shadow:0 0 8px rgba(255,213,77,.2)}
+.dot.on.trbl{background:var(--red);box-shadow:0 0 12px rgba(255,82,82,.2)}
+.controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center}
+.teclado{margin-top:12px;display:grid;grid-template-columns:repeat(3,100px);gap:12px;justify-content:center;padding:12px;background:linear-gradient(180deg,#e3e6e9,#d6d9db);border-radius:12px}
+.key{background:#fff;border-radius:8px;padding:16px;font-size:20px;font-weight:800;color:#071428;text-align:center;cursor:pointer;user-select:none;box-shadow:inset 0 -4px #ccc}
+.key.func{background:#0b1720;color:#dff4ff}
+.key.wide{grid-column:span 3;background:#0a9dff;color:#022}
+.procBox{margin-top:12px;background:linear-gradient(180deg,#06131a,#04101a);padding:12px;border-radius:8px;color:#d8eef6;min-height:140px;overflow:auto}
+.zonasBox{background:linear-gradient(180deg,#051018,#031018);padding:10px;border-radius:10px;color:#dfefff;display:flex;flex-direction:column;gap:8px;height:520px}
+.zoneRow{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:linear-gradient(180deg,#071a22,#051018);cursor:pointer}
+.zoneRow.open{background:linear-gradient(90deg,#4a0f0f,#2c0a0a);color:#fff}
+.zoneRow.fault{background:linear-gradient(90deg,#3b2a0a,#4f380a);color:#fff}
+.zoneRow.bypass{background:linear-gradient(90deg,#58460b,#826b0a);color:#fff}
+.hist{margin-top:8px;background:linear-gradient(180deg,#071419,#041018);padding:8px;border-radius:8px;height:220px;overflow:auto;font-size:13px;color:#bcd}
+.small{font-size:13px;color:#9fb}
+.footer{margin-top:8px;color:#89a;font-size:12px;text-align:center}
+.note{font-size:13px;color:#082;}
+
+/* responsive */
+@media(max-width:1160px){.container{flex-direction:column;width:100%}.left,.center,.right{width:100%}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="left panel">
+    <div class="title">SIMULADOR DSC - MODO CAPACITACIÓN (Display Clásico)</div>
+
+    <div class="topbar">
+      <button class="btn" id="modoBtn" onclick="toggleModoOperador()">Activar Modo Operador Real</button>
+      <button class="btn" onclick="openFaultsMenu()">Ver Fallas (*2)</button>
+      <button class="btn warn" id="acBtn" onclick="toggleAC()">Cortar Luz (AC)</button>
+      <button class="btn" onclick="exportHistory()">Exportar Historial CSV</button>
+    </div>
+
+    <div id="display" class="display">SYSTEM READY</div>
+    <div id="sub" class="subdisplay">Buffer: <span id="buffer">(vacío)</span></div>
+
+    <div class="leds">
+      <div class="ledWrap"><div id="led-power" class="dot on power"></div>POWER</div>
+      <div class="ledWrap"><div id="led-ready" class="dot on ready"></div>READY</div>
+      <div class="ledWrap"><div id="led-armed" class="dot"></div>ARMED</div>
+      <div class="ledWrap"><div id="led-trbl" class="dot"></div>TROUBLE</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" onclick="attemptArm()">ARMAR (Intent)</button>
+      <button class="btn" onclick="disarm()">DESARMAR</button>
+      <button class="btn warn" onclick="startBypass()">*1 BYPASS</button>
+      <button class="btn red" onclick="simulateAlarm()">DISPARAR ALARMA</button>
+    </div>
+
+    <div class="teclado" id="teclado">
+      <div class="key" onclick="pressKey('1')">1</div>
+      <div class="key" onclick="pressKey('2')">2</div>
+      <div class="key" onclick="pressKey('3')">3</div>
+
+      <div class="key" onclick="pressKey('4')">4</div>
+      <div class="key" onclick="pressKey('5')">5</div>
+      <div class="key" onclick="pressKey('6')">6</div>
+
+      <div class="key" onclick="pressKey('7')">7</div>
+      <div class="key" onclick="pressKey('8')">8</div>
+      <div class="key" onclick="pressKey('9')">9</div>
+
+      <div class="key func" onclick="pressKey('*')">*</div>
+      <div class="key" onclick="pressKey('0')">0</div>
+      <div class="key func" onclick="pressKey('#')">#</div>
+
+      <div class="key func wide" onclick="quick('stay')">STAY</div>
+      <div class="key func wide" onclick="quick('away')">AWAY</div>
+    </div>
+
+    <div id="proc" class="procBox">
+      <b>Procedimientos:</b>
+      <div id="procText">Aquí aparecerán procedimientos claros y directos para el operador (ej.: qué decir al cliente, pasos para bypass, cómo actuar ante AC Fail, Low Battery, Tamper, etc.).</div>
+    </div>
+
+  </div>
+
+  <div class="center panel zonasBox">
+    <div style="font-weight:800;text-align:center">ZONAS (1 - 8)</div>
+    <div id="zonesList"></div>
+
+    <div style="font-weight:800;margin-top:8px">Historial</div>
+    <div id="history" class="hist"></div>
+    <div class="footer">Modo capacitación — seguir los procedimientos mostrados.</div>
+  </div>
+
+  <div class="right panel">
+    <div style="font-weight:800;text-align:center">Guía rápida (LEDs)</div>
+    <div style="margin-top:8px">
+      <ul style="color:#123">
+        <li><b>POWER</b> (verde) = Panel con alimentación AC o batería OK.</li>
+        <li><b>READY</b> (azul) = No hay zonas abiertas ni fallas críticas.</li>
+        <li><b>ARMED</b> (ámbar) = Sistema armado.</li>
+        <li><b>TROUBLE</b> (rojo) = Falla: AC, zona, comm, etc. Ver *2.</li>
+      </ul>
+    </div>
+
+    <div style="margin-top:12px">
+      <div style="font-weight:800">Cómo usar (resumen)</div>
+      <ol style="margin-top:6px;color:#123">
+        <li>Presione <b>*1</b> para iniciar BYPASS (ingrese nº zona y confirme con <b>#</b>).</li>
+        <li>Presione <b>*2</b> o el botón 'Ver Fallas' para abrir el menú de fallas.</li>
+        <li>Si <b>TROUBLE</b> está encendido: abrir *2 y seguir procedimiento.</li>
+        <li>Presente: muestre pantalla, procedimientos y el historial.</li>
+      </ol>
+    </div>
+
+    <div style="margin-top:12px;color:#0a3342">
+      <div style="font-weight:800">Consejo</div>
+      <div class="small">Cuando muestres esto, decí que lo armaste para practicar y que querés aprender con ellos — pedir guía al capacitador.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================
+   Simulador DSC - Lógica JS
+   ============================ */
+
+/* Estado */
+const NUM_ZONES = 8;
+let zones = [];
+let buffer = "";
+let mode = "normal"; // normal | bypass | faultsMenu
+let bypassDigits = "";
+let armed = false;
+let ac_ok = true;
+let batteryHours = 0;
+let batteryTimer = null;
+let audioCtx = null;
+
+/* Fallas del sistema (activas/inactivas) */
+let systemFaults = {
+  ac:false,
+  low_batt:false,
+  siren_fail:false,
+  clock_fail:false,
+  tamper:false,
+  comm_fail:false,
+  zone_fault:false,
+  keypad_fail:false
+};
+
+/* Inicializar */
+function init(){
+  for(let i=0;i<NUM_ZONES;i++) zones.push({open:false,fault:false,bypass:false});
+  renderZones();
+  updateLeds();
+  setProc("Capacitación: presione *1 para BYPASS, *2 para ver fallas, # para salir/cancelar.");
+  setDisplay("SYSTEM READY");
+  setBuffer();
+}
+function renderZones(){
+  const c = document.getElementById('zonesList'); c.innerHTML = "";
+  zones.forEach((z,idx)=>{
+    const row = document.createElement('div');
+    row.className = 'zoneRow' + (z.open? ' open' : (z.fault? ' fault' : (z.bypass? ' bypass' : '')));
+    row.innerHTML = `<span>Zona ${String(idx+1).padStart(2,'0')}: ${z.fault? 'FALLA' : (z.open? 'ABIERTA' : 'CERRADA')}${z.bypass? ' (BYPASS)':''}</span>
+      <div style="display:flex;gap:6px">
+        <button onclick="toggleOpen(${idx})">Abrir/Cerrar</button>
+        <button onclick="toggleFault(${idx})">Simular Falla</button>
+        <button onclick="toggleBypass(${idx})">${z.bypass? 'Quitar BYP' : 'Bypass'}</button>
+      </div>`;
+    c.appendChild(row);
+  });
+}
+
+/* UI helpers */
+function setDisplay(txt){ if(!document.hidden) document.getElementById('display').textContent = txt; }
+function setProc(txt){ document.getElementById('procText').innerHTML = txt; }
+function setBuffer(){ document.getElementById('buffer').textContent = buffer || "(vacío)"; }
+function addHistory(line){ const h = document.getElementById('history'); const t = new Date().toLocaleTimeString(); h.innerHTML = `<div>[${t}] ${line}</div>` + h.innerHTML; }
+
+/* Audio - Beeps fuertes y claros (estilo B) */
+function _beep(ms=120, freq=1000, vol=0.12){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    setTimeout(()=>o.stop(), ms);
+  }catch(e){}
+}
+function beepShort(){ _beep(80,1200,0.14); }
+function beepError(){ _beep(80,700,0.16); setTimeout(()=>_beep(80,700,0.16),140); setTimeout(()=>_beep(80,700,0.16),280); }
+function beepConfirm(){ _beep(100,1400,0.12); setTimeout(()=>_beep(70,1700,0.09),120); }
+function beepAlarm(){ _beep(400,320,0.18); }
+
+/* LEDs */
+function updateLeds(){
+  const anyOpen = zones.some(z=> z.open && !z.bypass);
+  const anyFault = zones.some(z=> z.fault);
+  systemFaults.zone_fault = anyFault;
+  document.getElementById('led-ready').classList.toggle('on', !anyOpen && !anyFault && !armed);
+  document.getElementById('led-armed').classList.toggle('on', armed);
+  document.getElementById('led-trbl').classList.toggle('on', (!ac_ok) || anyFault || systemFaults.comm_fail);
+  document.getElementById('led-power').classList.toggle('on', ac_ok);
+  if(!ac_ok) setDisplay("AC TROUBLE");
+  else if(anyFault) setDisplay("ZONE FAULT");
+  else if(anyOpen && !armed) setDisplay("NOT READY - ZONA ABIERTA");
+  else if(armed) setDisplay("ARMED");
+  else setDisplay("SYSTEM READY");
+}
+
+/* ===== Teclado / Menús ===== */
+function pressKey(k){
+  // cancel / confirm with #
+  if(k === '#'){
+    if(mode === 'bypass') { confirmBypass(); return; }
+    if(mode === 'faultsMenu') { mode='normal'; setProc("Salida del menú de fallas."); buffer=""; setBuffer(); beepShort(); return; }
+    // normal: clear buffer
+    buffer = ""; setProc("Buffer limpiado."); setBuffer(); beepShort(); return;
+  }
+
+  // '*' handling
+  if(k === '*'){
+    buffer += '*'; setBuffer(); beepShort(); return;
+  }
+
+  // if in bypass mode accept digits
+  if(mode === 'bypass'){
+    if(/\d/.test(k) && bypassDigits.length < 2){
+      bypassDigits += k;
+      buffer = '*1' + bypassDigits;
+      setProc(`BY-PASS: Zona objetivo ${bypassDigits}. Presione # para confirmar o # sin dígitos para cancelar.`);
+      setBuffer(); beepShort();
+    }
+    return;
+  }
+
+  // if in faults menu and digit pressed, show detail
+  if(mode === 'faultsMenu'){
+    if(/\d/.test(k)){
+      const n = parseInt(k,10);
+      showFaultDetail(n);
+    }
+    return;
+  }
+
+  // normal: accumulate buffer
+  buffer += String(k);
+  setBuffer(); beepShort();
+
+  // detect *1 and *2 sequences
+  if(buffer.endsWith('*1')){ mode='bypass'; bypassDigits=""; setProc("Ingreso a BYPASS. Ingrese Nº zona (ej: 01) y confirme con #."); beepConfirm(); buffer='*1'; setBuffer(); return; }
+  if(buffer.endsWith('*2')){ openFaultsMenu(); buffer=""; setBuffer(); return; }
+
+  // example: if user types 4 digits → simulate code entry and attempt arm
+  if(buffer.length >= 4){ attemptArm(); buffer=""; setBuffer(); }
+}
+
+/* ===== BYPASS ===== */
+function startBypass(){ mode='bypass'; bypassDigits=""; buffer='*1'; setProc("BY-PASS: ingrese número de zona y confirme con #"); setBuffer(); beepConfirm(); }
+function confirmBypass(){
+  if(mode !== 'bypass'){ buffer=""; setBuffer(); return; }
+  if(bypassDigits.length === 0){ mode='normal'; buffer=''; setProc("Bypass cancelado."); beepError(); setBuffer(); return; }
+  let zid = parseInt(bypassDigits,10);
+  if(isNaN(zid) || zid <1 || zid>NUM_ZONES){ setProc("Zona inválida. Presione # para salir."); beepError(); return; }
+  const idx = zid-1;
+  zones[idx].bypass = !zones[idx].bypass;
+  addHistory(`${zones[idx].bypass? 'Bypass ON':'Bypass OFF'} Zona ${String(zid).padStart(2,'0')}`);
+  setProc(zones[idx].bypass? `Zona ${String(zid).padStart(2,'0')} INHABILITADA (BYPASS). Procedimiento: agendar servicio técnico.` : `Zona ${String(zid).padStart(2,'0')} REMOVIDA de BYPASS.`);
+  beepConfirm();
+  mode='normal'; buffer=''; bypassDigits=''; renderZones(); updateLeds(); setBuffer();
+}
+
+/* ===== ARM / DISARM ===== */
+function attemptArm(){
+  if(!ac_ok){
+    setProc("No se puede armar: Falla AC. Procedimiento: llamar al titular, informar falta de luz.");
+    addHistory("Intento de armado fallido: AC Trouble"); beepError(); updateLeds(); return;
+  }
+  const faultZones = zones.map((z,i)=> z.fault? i+1 : null ).filter(Boolean);
+  if(faultZones.length){
+    setProc(`No se puede armar: Falla en zona(s) ${faultZones.join(', ')}. Procedimiento: confirmar tapa/batería del sensor con el cliente. Si persiste, BYPASS (*1).`);
+    addHistory(`Intento de armado fallido: zone fault ${faultZones.join(',')}`); beepError(); updateLeds(); return;
+  }
+  const openZones = zones.map((z,i)=> (z.open && !z.bypass)? i+1 : null ).filter(Boolean);
+  if(openZones.length){
+    setProc(`No se puede armar: Zona(s) abiertas: ${openZones.join(', ')}. Procedimiento: pedir al cliente que cierre la zona o realizar BYPASS (*1).`);
+    addHistory(`Intento armado fallido: zones open ${openZones.join(',')}`); beepError(); updateLeds(); return;
+  }
+  armed = true;
+  addHistory("Sistema armado correctamente");
+  setProc("🔐 Sistema armado. Informar al cliente que si abre una zona sonará la alarma.");
+  beepConfirm(); setTimeout(()=>beepShort(),140);
+  updateLeds();
+}
+function disarm(){ if(!armed){ setProc("Sistema ya desarmado."); beepShort(); return; } armed=false; addHistory("Sistema desarmado"); setProc("🔓 Sistema desarmado."); beepShort(); updateLeds(); }
+
+/* ===== Toggle zone open/fault/bypass from right panel ===== */
+function toggleOpen(i){ zones[i].open = !zones[i].open; if(zones[i].open){ setProc(`Zona ${String(i+1).padStart(2,'0')} ABIERTA. Pedir al cliente que cierre la puerta/ventana. Si persiste, realizar BYPASS (*1).`); addHistory(`Zona ${String(i+1).padStart(2,'0')} abierta (simulada)`); beepError(); } else { setProc(`Zona ${String(i+1).padStart(2,'0')} cerrada.`); addHistory(`Zona ${String(i+1).padStart(2,'0')} cerrada (simulada)`); beepShort(); } renderZones(); updateLeds(); }
+function toggleFault(i){ zones[i].fault = !zones[i].fault; if(zones[i].fault){ setProc(`Falla en Zona ${String(i+1).padStart(2,'0')}. Procedimiento: llamar al cliente, pedir verificar tapa/batería. Si persiste, BYPASS (*1) y agendar técnico.`); addHistory(`Falla simulada en Zona ${String(i+1).padStart(2,'0')}`); beepError(); } else { setProc(`Falla resuelta en Zona ${String(i+1).padStart(2,'0')}.`); addHistory(`Falla resuelta en Zona ${String(i+1).padStart(2,'0')}`); beepShort(); } renderZones(); updateLeds(); }
+function toggleBypass(i){ zones[i].bypass = !zones[i].bypass; addHistory(`${zones[i].bypass? 'Bypass ON':'Bypass OFF'} Zona ${String(i+1).padStart(2,'0')}`); setProc(zones[i].bypass? `Zona ${String(i+1).padStart(2,'0')} INHABILITADA (BYPASS)` : `Zona ${String(i+1).padStart(2,'0')} removida de BYPASS`); beepConfirm(); renderZones(); updateLeds(); }
+
+/* ===== AC simulation & battery timer ===== */
+function toggleAC(){
+  ac_ok = !ac_ok;
+  const btn = document.getElementById('acBtn');
+  if(!ac_ok){
+    btn.textContent = "Restaurar Luz (AC)";
+    setProc("⚠ Falla de Energía (AC). Procedimiento: llamar al titular e informar falta de luz. Si persiste >24-48h, batería puede agotarse.");
+    addHistory("AC Trouble - energía cortada");
+    beepError();
+    // start battery timer simulation (2s ~ 1 hour)
+    batteryHours = 0; clearInterval(batteryTimer);
+    batteryTimer = setInterval(()=>{
+      batteryHours++;
+      if(batteryHours === 24){ setProc("⚠ Low Battery: >24hs sin AC. Avisar al cliente. Agendar técnico."); addHistory("Low Battery warning"); beepError(); }
+      if(batteryHours >= 48){ setProc("🔻 Batería agotada: panel sin comunicación. Procedimiento: informar caída total y enviar móvil si corresponde."); addHistory("Battery depleted - panel off"); beepAlarm(); document.querySelectorAll('.key, .btn').forEach(el=>el.disabled=true); clearInterval(batteryTimer); updateLeds(); }
+    }, 2000);
+  } else {
+    btn.textContent = "Cortar Luz (AC)";
+    setProc("🔌 Energía AC restaurada. Sistema normal.");
+    addHistory("AC restored");
+    beepConfirm();
+    clearInterval(batteryTimer); batteryHours=0; document.querySelectorAll('.key, .btn').forEach(el=>el.disabled=false);
+  }
+  updateLeds();
+}
+// alias for top button (same)
+function toggleAC(){ toggleAC_state(); }
+function toggleAC_state(){
+  ac_ok = !ac_ok;
+  const btn = document.getElementById('acBtn');
+  if(!ac_ok){
+    btn.textContent = "Restaurar Luz (AC)";
+    setProc("⚠ Falla de Energía (AC). Procedimiento: llamar al titular e informar falta de luz. Si persiste >24-48h, batería puede agotarse.");
+    addHistory("AC Trouble - energía cortada");
+    beepError();
+    batteryHours = 0; clearInterval(batteryTimer);
+    batteryTimer = setInterval(()=>{
+      batteryHours++;
+      if(batteryHours === 24){ setProc("⚠ Low Battery: >24hs sin AC. Avisar al cliente. Agendar técnico."); addHistory("Low Battery warning"); beepError(); }
+      if(batteryHours >= 48){ setProc("🔻 Batería agotada: panel sin comunicación. Procedimiento: informar caída total y enviar móvil si corresponde."); addHistory("Battery depleted - panel off"); beepAlarm(); document.querySelectorAll('.key, .btn').forEach(el=>el.disabled=true); clearInterval(batteryTimer); updateLeds(); }
+    }, 2000);
+  } else {
+    btn.textContent = "Cortar Luz (AC)";
+    setProc("🔌 Energía AC restaurada. Sistema normal.");
+    addHistory("AC restored");
+    beepConfirm();
+    clearInterval(batteryTimer); batteryHours=0; document.querySelectorAll('.key, .btn').forEach(el=>el.disabled=false);
+  }
+  updateLeds();
+}
+
+/* ===== Faults menu (*2) ===== */
+function openFaultsMenu(){
+  mode = 'faultsMenu';
+  // determine dynamic statuses
+  const faultsList = [
+    {id:1,key:'ac',title:'Falta de AC', active: !ac_ok},
+    {id:2,key:'low_batt',title:'Batería baja', active: batteryHours >= 24},
+    {id:3,key:'siren_fail',title:'Falla de sirena', active: systemFaults.siren_fail},
+    {id:4,key:'clock_fail',title:'Reloj no configurado', active: systemFaults.clock_fail},
+    {id:5,key:'tamper',title:'Tamper / Caja abierta', active: systemFaults.tamper},
+    {id:6,key:'comm_fail',title:'Falla de comunicación', active: systemFaults.comm_fail},
+    {id:7,key:'zone_fault',title:'Falla de zona', active: zones.some(z=>z.fault)},
+    {id:8,key:'keypad_fail',title:'Falla de teclado', active: systemFaults.keypad_fail}
+  ];
+  let html = `<b>MENÚ DE FALLAS (*2)</b><br>Presione nº (1-8) para ver detalle. Presione # para salir.<ul>`;
+  faultsList.forEach(f=>{
+    html += `<li>${f.id}. ${f.title} — <b>${f.active? 'ACTIVA':'OK'}</b></li>`;
+  });
+  html += `</ul><i>Ej: presione 1 para ver procedimiento de AC Fail</i>`;
+  setProc(html);
+  addHistory("Acceso a menú de fallas (*2)");
+  beepConfirm();
+}
+function showFaultDetail(n){
+  if(mode !== 'faultsMenu') mode='faultsMenu';
+  let detail="";
+  switch(n){
+    case 1:
+      detail = `<b>1) Falta de AC</b><br>LED: <i>TROUBLE</i> encendido. Procedimiento: llamar al titular, informar que el equipo está sin energía. Preguntar si es corte general. Registrar hora. Si >24-48h, advertir posible agotamiento de batería y envío de móvil si procede.`;
+      break;
+    case 2:
+      detail = `<b>2) Batería baja</b><br>LED: <i>TROUBLE</i> y posible mensaje Low Battery. Procedimiento: avisar al cliente, agendar reemplazo batería; si no responde, monitoreo intenso.`;
+      break;
+    case 3:
+      detail = `<b>3) Falla de sirena</b><br>LED: <i>TROUBLE</i>. Procedimiento: informar al cliente que la sirena puede no sonar; coordinar reparación.`;
+      break;
+    case 4:
+      detail = `<b>4) Reloj no configurado</b><br>LED: no crítico. Procedimiento: informar técnico para sincronizar reloj (afecta timestamps).`;
+      break;
+    case 5:
+      detail = `<b>5) Tamper / Caja abierta</b><br>LED: <i>TROUBLE</i>. Procedimiento: pedir al cliente que cheque la tapa del panel/sensor. Si persiste, agendar técnico y considerar bypass temporal.`;
+      break;
+    case 6:
+      detail = `<b>6) Falla de comunicación</b><br>LED: <i>TROUBLE</i>. Procedimiento: verificar línea telefónica / internet; llamar al titular; agendar soporte; registrar prioridad.`;
+      break;
+    case 7:
+      detail = `<b>7) Falla de zona</b><br>LED: <i>TROUBLE</i>. Procedimiento: pedir al cliente que verifique sensor (imán/tapa). Si la zona sigue indicando falla tras cierre, realizar BYPASS (*1 + zona) y agendar técnico.`;
+      break;
+    case 8:
+      detail = `<b>8) Falla de teclado</b><br>Procedimiento: solicitar descripción del comportamiento; si no responde, agendar técnico.`;
+      break;
+    default:
+      detail = "Falla desconocida.";
+  }
+  setProc(detail + "<br><i>Presione # para volver al menú o salir.</i>");
+  addHistory(`Consulta detalle falla ${n}`);
+  beepShort();
+}
+
+/* ===== Mode operador real toggle ===== */
+function toggleModoOperador(){
+  const btn = document.getElementById('modoBtn');
+  if(btn.dataset.on === '1'){ btn.dataset.on='0'; btn.textContent='Activar Modo Operador Real'; setProc("Modo Operador DESACTIVADO"); } 
+  else { btn.dataset.on='1'; btn.textContent='Desactivar Modo Operador Real'; setProc("Modo Operador REAL ACTIVADO - Ocultando ayudas extras"); }
+}
+
+/* ===== Simulate alarm (training) ===== */
+function simulateAlarm(){ addHistory("Simulación: ALARMA disparada (práctica)"); setProc("🚨 ALARMA SIMULADA — Procedimiento: contactar cliente; si no contesta, enviar móvil."); beepAlarm(); }
+
+/* ===== Quick helpers ===== */
+function quick(m){ if(m==='stay'){ setProc("Modo STAY (simulado)"); beepShort(); } if(m==='away'){ setProc("Modo AWAY (simulado)"); beepShort(); } }
+
+/* ===== Export history to CSV ===== */
+function exportHistory(){
+  const rows = Array.from(document.querySelectorAll('#history > div')).map(div=>div.textContent.trim());
+  if(rows.length===0){ alert('No hay historial para exportar'); return; }
+  let csv = 'timestamp,evento\\n';
+  rows.reverse().forEach(r=>{
+    const match = r.match(/\\[(.*?)\\]\\s(.*)/);
+    if(match) csv += `"${match[1]}","${match[2].replace(/"/g,'""')}"\\n`;
+    else csv += `,"${r.replace(/"/g,'""')}"\\n`;
+  });
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'historial_simulador.csv'; a.click(); URL.revokeObjectURL(url);
+}
+
+/* ===== Utilities used by buttons in right panel (exposed) ===== */
+window.toggleOpen = function(i){ toggleOpen(i); };
+window.toggleFault = function(i){ toggleFault(i); };
+window.toggleBypass = function(i){ toggleBypass(i); };
+window.startBypass = function(){ startBypass(); };
+window.pressKey = function(k){ pressKey(k); };
+window.openFaultsMenu = function(){ openFaultsMenu(); };
+window.showFaultDetail = function(n){ showFaultDetail(n); };
+
+/* ===== renderZones clickable actions mapping (create buttons in renderZones) ===== */
+/* Note: renderZones above creates action buttons per zone */
+
+/* Init */
+init();
+</script>
+</body>
+</html>
